@@ -40,8 +40,8 @@
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: radial-gradient(circle at 35% 35%, #6b9fff, #4560e9, #2b39c0);
-      box-shadow: 0 0 15px rgba(69, 96, 233, 0.6), inset 0 -3px 6px rgba(0,0,0,0.3);
+      background: radial-gradient(circle at 35% 35%, #fff7a0, #ffd700, #ccaa00);
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.6), inset 0 -3px 6px rgba(0,0,0,0.3);
     }
 
     .shadow {
@@ -65,6 +65,39 @@
       text-transform: uppercase;
       pointer-events: none;
     }
+
+    .controls {
+      margin-top: 16px;
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      color: #ccc;
+      font-size: 14px;
+    }
+
+    .controls label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .controls input[type="range"] {
+      width: 120px;
+      accent-color: #ffd700;
+    }
+
+    .controls span.value {
+      min-width: 28px;
+      text-align: right;
+      color: #ffd700;
+      font-weight: bold;
+    }
+
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -75,52 +108,69 @@
     const ARENA_WIDTH = 600;
     const ARENA_HEIGHT = 400;
     const BALL_SIZE = 40;
-    const GRAVITY = 0.3;
     const DAMPING = 0.8;
     const FRICTION = 0.99;
 
-    function BouncingBall() {
-      const ballRef = useRef({
-        x: ARENA_WIDTH / 2 - BALL_SIZE / 2,
-        y: 50,
-        vx: 3,
+    function createBall() {
+      return {
+        x: Math.random() * (ARENA_WIDTH - BALL_SIZE),
+        y: Math.random() * (ARENA_HEIGHT / 2),
+        vx: (Math.random() - 0.5) * 6,
         vy: 0,
-      });
-      const [pos, setPos] = useState({ x: ballRef.current.x, y: ballRef.current.y });
+      };
+    }
+
+    function BouncingBalls() {
+      const [gravity, setGravity] = useState(0.3);
+      const [numBalls, setNumBalls] = useState(1);
+      const ballsRef = useRef([createBall()]);
+      const [positions, setPositions] = useState(ballsRef.current.map(b => ({ x: b.x, y: b.y })));
       const animationRef = useRef();
+      const gravityRef = useRef(gravity);
+
+      gravityRef.current = gravity;
+
+      // Sync ball count
+      useEffect(() => {
+        const current = ballsRef.current;
+        if (numBalls > current.length) {
+          for (let i = current.length; i < numBalls; i++) {
+            current.push(createBall());
+          }
+        } else if (numBalls < current.length) {
+          current.length = numBalls;
+        }
+      }, [numBalls]);
 
       const animate = useCallback(() => {
-        const ball = ballRef.current;
+        const balls = ballsRef.current;
+        const g = gravityRef.current;
 
-        ball.vy += GRAVITY;
-        ball.vx *= FRICTION;
+        balls.forEach(ball => {
+          ball.vy += g;
+          ball.vx *= FRICTION;
+          ball.x += ball.vx;
+          ball.y += ball.vy;
 
-        ball.x += ball.vx;
-        ball.y += ball.vy;
+          if (ball.y + BALL_SIZE > ARENA_HEIGHT) {
+            ball.y = ARENA_HEIGHT - BALL_SIZE;
+            ball.vy = -ball.vy * DAMPING;
+          }
+          if (ball.y < 0) {
+            ball.y = 0;
+            ball.vy = -ball.vy * DAMPING;
+          }
+          if (ball.x + BALL_SIZE > ARENA_WIDTH) {
+            ball.x = ARENA_WIDTH - BALL_SIZE;
+            ball.vx = -ball.vx * DAMPING;
+          }
+          if (ball.x < 0) {
+            ball.x = 0;
+            ball.vx = -ball.vx * DAMPING;
+          }
+        });
 
-        // Floor bounce
-        if (ball.y + BALL_SIZE > ARENA_HEIGHT) {
-          ball.y = ARENA_HEIGHT - BALL_SIZE;
-          ball.vy = -ball.vy * DAMPING;
-        }
-
-        // Ceiling bounce
-        if (ball.y < 0) {
-          ball.y = 0;
-          ball.vy = -ball.vy * DAMPING;
-        }
-
-        // Wall bounces
-        if (ball.x + BALL_SIZE > ARENA_WIDTH) {
-          ball.x = ARENA_WIDTH - BALL_SIZE;
-          ball.vx = -ball.vx * DAMPING;
-        }
-        if (ball.x < 0) {
-          ball.x = 0;
-          ball.vx = -ball.vx * DAMPING;
-        }
-
-        setPos({ x: ball.x, y: ball.y });
+        setPositions(balls.map(b => ({ x: b.x, y: b.y })));
         animationRef.current = requestAnimationFrame(animate);
       }, []);
 
@@ -133,41 +183,60 @@
         const rect = e.currentTarget.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
-        const ball = ballRef.current;
-        ball.x = clickX - BALL_SIZE / 2;
-        ball.y = clickY - BALL_SIZE / 2;
-        ball.vx = (Math.random() - 0.5) * 10;
-        ball.vy = -8;
+        ballsRef.current.forEach(ball => {
+          ball.x = clickX - BALL_SIZE / 2;
+          ball.y = clickY - BALL_SIZE / 2;
+          ball.vx = (Math.random() - 0.5) * 10;
+          ball.vy = -8;
+        });
       };
 
-      const shadowScale = 1 - (ARENA_HEIGHT - BALL_SIZE - pos.y) / ARENA_HEIGHT * 0.6;
-      const shadowOpacity = 0.3 * shadowScale;
-
       return (
-        <div className="arena" onClick={handleClick}>
-          <div className="title">Click anywhere to relaunch</div>
-          <div
-            className="shadow"
-            style={{
-              left: pos.x,
-              bottom: 5,
-              opacity: shadowOpacity,
-              transform: `scaleX(${shadowScale})`,
-            }}
-          />
-          <div
-            className="ball"
-            style={{
-              left: pos.x,
-              top: pos.y,
-            }}
-          />
+        <div className="wrapper">
+          <div className="arena" onClick={handleClick}>
+            <div className="title">Click anywhere to relaunch</div>
+            {positions.map((pos, i) => {
+              const shadowScale = 1 - (ARENA_HEIGHT - BALL_SIZE - pos.y) / ARENA_HEIGHT * 0.6;
+              const shadowOpacity = 0.3 * shadowScale;
+              return (
+                <React.Fragment key={i}>
+                  <div
+                    className="shadow"
+                    style={{
+                      left: pos.x,
+                      bottom: 5,
+                      opacity: shadowOpacity,
+                      transform: `scaleX(${shadowScale})`,
+                    }}
+                  />
+                  <div
+                    className="ball"
+                    style={{ left: pos.x, top: pos.y }}
+                  />
+                </React.Fragment>
+              );
+            })}
+          </div>
+          <div className="controls">
+            <label>
+              Gravity
+              <input type="range" min="0" max="1" step="0.05" value={gravity}
+                onChange={e => setGravity(parseFloat(e.target.value))} />
+              <span className="value">{gravity.toFixed(2)}</span>
+            </label>
+            <label>
+              Balls
+              <input type="range" min="1" max="20" step="1" value={numBalls}
+                onChange={e => setNumBalls(parseInt(e.target.value))} />
+              <span className="value">{numBalls}</span>
+            </label>
+          </div>
         </div>
       );
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<BouncingBall />);
+    root.render(<BouncingBalls />);
   </script>
 </body>
 </html>
